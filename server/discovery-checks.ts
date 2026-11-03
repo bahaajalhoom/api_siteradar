@@ -1,6 +1,8 @@
 import { XMLParser, XMLValidator } from 'fast-xml-parser';
 import robotsParser from 'robots-parser';
 import type { AuditResource, Finding, PositiveSignal } from '../lib/types.ts';
+// The package's ambient declaration is incompatible with NodeNext; runtime exports a function.
+const parseRobots = robotsParser as unknown as (url: string, content: string) => { isAllowed(url: string, agent: string): boolean | undefined };
 
 const NS = 'http://www.sitemaps.org/schemas/sitemap/0.9';
 export function sitemapDeclarations(content: string) {
@@ -45,7 +47,7 @@ export function analyzeDiscovery(resources: AuditResource[], origin: string) {
         if (!/^[\w-]+\s*:/.test(line)) malformed.push(line);
       }
       if (malformed.length) issue(r,'SEO-ROBOTS-SYNTAX','robots.txt contains misplaced or malformed directives','SEO',malformed.slice(0,5).join('\n'),'Place Allow/Disallow under a user-agent group and use directive: value syntax.');
-      const robots = robotsParser(r.url,r.content);
+      const robots = parseRobots(r.url,r.content);
       if (robots.isAllowed(`${origin}/`,'Googlebot') === false)
         issue(r,'SEO-ROBOTS-BLOCK','robots.txt blocks Googlebot from the homepage','SEO','Googlebot is disallowed for the site root.','Review whether this block is intentional before allowing crawling.',true);
       for (const agent of ['GPTBot','OAI-SearchBot','ChatGPT-User','ClaudeBot'])

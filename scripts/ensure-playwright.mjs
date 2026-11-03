@@ -18,4 +18,15 @@ if (!existsSync(executablePath)) {
   }
 }
 
+if (process.platform === "linux") {
+  const dependencies = spawnSync("ldd", [chromium.executablePath()], { encoding: "utf8" });
+  if (dependencies.error || dependencies.status !== 0)
+    throw new Error("Cannot inspect Chromium system libraries: install ldd and Playwright system dependencies in the container image.");
+  if (dependencies.stdout.includes("not found")) {
+    console.log("Chromium system libraries are missing. Installing Playwright dependencies.");
+    const cliPath = fileURLToPath(new URL("../node_modules/playwright/cli.js", import.meta.url));
+    const result = spawnSync(process.execPath, [cliPath, "install-deps", "chromium"], { stdio: "inherit" });
+    if (result.status !== 0) process.exit(result.status ?? 1);
+  }
+}
 console.log(`Playwright Chromium ready: ${chromium.executablePath()}`);

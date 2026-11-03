@@ -1,5 +1,6 @@
 import { chromium, type Browser, type BrowserContext } from "playwright";
 import { launch, type LaunchedChrome } from "chrome-launcher";
+import { createServer } from "node:net";
 import lighthouse from "lighthouse";
 import desktopConfig from "lighthouse/core/config/lr-desktop-config.js";
 import AxeBuilder from "@axe-core/playwright";
@@ -11,14 +12,23 @@ export async function startAuditBrowser(config: AuditConfig) {
     browser: Browser | undefined,
     context: BrowserContext | undefined;
   try {
+    // Use an explicit CDP port: avoid depending on chrome-launcher's log parser.
+    const probe = createServer();
+    const port = await new Promise<number>((resolve, reject) => {
+      probe.once("error", reject);
+      probe.listen(0, "127.0.0.1", () => {
+        const address = probe.address();
+        if (!address || typeof address === "string") return reject(new Error("Cannot allocate browser port"));
+        probe.close(() => resolve(address.port));
+      });
+    });
     chrome = await launch({
+      port,
       chromePath: chromium.executablePath(),
       maxConnectionRetries: 40,
       connectionPollInterval: 250,
       chromeFlags: [
-        // The classic headless mode is more reliable in minimal Linux
-        // containers and still exposes the CDP port Lighthouse needs.
-        "--headless",
+        "--headless=new",
         `--proxy-server=${proxy.url}`,
         "--proxy-bypass-list=<-loopback>",
         "--no-sandbox",

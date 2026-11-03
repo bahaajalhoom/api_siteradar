@@ -4,8 +4,10 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "prestart": "node scripts/ensure-playwright.mjs",
     "postinstall": "playwright install chromium",
     "start": "node server/http.ts",
+    "preworker": "node scripts/ensure-playwright.mjs",
     "worker": "node server/worker.ts",
     "test": "vitest run",
     "typecheck": "tsc --noEmit"

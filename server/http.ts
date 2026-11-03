@@ -13,6 +13,8 @@ const port = Number(process.env.PORT || 3000);
 const allowedOrigins = new Set([
   "https://siteradar.site",
   "https://www.siteradar.site",
+  "https://siteradar-30b3e.web.app",
+  "https://siteradar-30b3e.firebaseapp.com",
   "http://127.0.0.1:3001",
   "http://localhost:3001",
   ...(process.env.FRONTEND_ORIGIN || "").split(",").map(value => value.trim()).filter(Boolean),

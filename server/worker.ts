@@ -3,6 +3,7 @@ import { claimAudit, getAudit, saveAudit, db } from "./db.ts";
 import { safeFetch, validateTarget } from "./safe-fetch.ts";
 import { analyzeHtml, scoreCategory } from "./checks.ts";
 import { analyzeDiscovery, sitemapDeclarations } from "./discovery-checks.ts";
+import { contentQuality, missingFileGuidance } from "./content-quality.ts";
 import { categories, type Audit, type AuditResource, type PositiveSignal } from "../lib/types.ts";
 import { startAuditBrowser } from "./browser-audit.ts";
 import { checkRankings } from "./rankings.ts";
@@ -104,7 +105,6 @@ async function run(a: Audit) {
     const discovery = analyzeDiscovery(analysisResources, origin);
     a.findings.push(...discovery.findings);
     a.positives = [...(a.positives ?? []), ...discovery.positives];
-    for (const resource of a.resources) resource.content = resource.content.slice(0, 20000);
     event(
       a,
       `Checked discovery files: ${a.resources.filter((resource) => resource.available).map((resource) => resource.path).join(", ") || "none found"}.`,
@@ -218,6 +218,15 @@ async function run(a: Audit) {
       throw new Error(
         "No HTML pages could be analyzed. Review robots.txt, access restrictions, or the URL.",
       );
+    const editorial = contentQuality(a.resources ?? [], a.pages);
+    a.findings.push(...editorial);
+    for (const finding of a.findings.filter(f => f.rule === 'GEO-DISCOVERY-FETCH')) {
+      const resource = a.resources?.find(r => r.url === finding.pages[0]);
+      if(resource) finding.recommendation = missingFileGuidance(resource, a.pages);
+    }
+    // A format-only pass must not survive a failed editorial review for that file.
+    a.positives = a.positives?.filter(p => !editorial.some(f => f.pages.some(url=>p.pages.includes(url))));
+    for (const resource of a.resources ?? []) resource.content = resource.content.slice(0, 20000);
     if (runtime) {
       event(
         a,

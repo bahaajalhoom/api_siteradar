@@ -32,6 +32,21 @@ committed or copied into a public repository.
 
 ## Production persistence
 
+## Discovery and content checks
+
+Discovery reports inspect fetched robots directives, sitemap XML/URLs, and
+llms Markdown. Editorial checks flag short explanations, repeated passages,
+generic link labels, excluded observed link targets, duplicate full-text
+companions, and claims requiring evidence. These are disclosed heuristics,
+not semantic truth verification or predictions of search/AI rankings.
+Repair guidance can include drafts from fetched page metadata; drafts retain
+untrusted-data markers and require human review. Missing optional files are
+Medium findings; a homepage Googlebot block is High and requires intent review.
+Reference guidance: https://llmstxt.org/ and
+https://developers.google.com/search/docs/appearance/ai-features .
+
+## Production persistence details
+
 The API uses `DATA_DIR` for SQLite and the encryption key. In production, set
 `DATA_DIR` to the path of a persistent volume (for example `/data`) and mount
 that volume before deploying. A Git commit/redeploy is not a database backup;

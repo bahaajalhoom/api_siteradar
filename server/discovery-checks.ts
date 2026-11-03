@@ -11,7 +11,8 @@ export function sitemapDeclarations(content: string) {
 export function analyzeDiscovery(resources: AuditResource[], origin: string) {
   const findings: Finding[] = [], positives: PositiveSignal[] = [];
   function issue(resource: AuditResource, rule: string, title: string, category: Finding['category'], evidence: string, recommendation: string, review = false) {
-    findings.push({id:crypto.randomUUID(),rule,title,category,severity:review?'Low':'Medium',pages:[resource.url],evidence:evidence.slice(0,1500),recommendation,effort:'Review required',kind:review?'Needs review':'Observed'});
+    const severity = rule === 'SEO-ROBOTS-BLOCK' || (rule === 'SEO-ROBOTS-FETCH' && resource.status >= 500) ? 'High' : rule.endsWith('-FETCH') ? 'Medium' : review?'Low':'Medium';
+    findings.push({id:crypto.randomUUID(),rule,title,category,severity,pages:[resource.url],evidence:evidence.slice(0,1500),recommendation,effort:'Review required',kind:review?'Needs review':'Observed'});
   }
   function pass(resource: AuditResource, rule: string, title: string, category: Finding['category'], evidence: string) {
     positives.push({id:crypto.randomUUID(),rule,title,category,pages:[resource.url],evidence});

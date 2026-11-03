@@ -274,6 +274,8 @@ async function run(a: Audit) {
       if (existing) {
         existing.pages.push(...finding.pages);
         existing.evidence += `\n${finding.pages[0]}: ${finding.evidence}`;
+        if (existing.recommendation !== finding.recommendation)
+          existing.recommendation += `\n\n${finding.pages[0]}:\n${finding.recommendation}`;
       } else grouped.set(finding.rule, { ...finding });
     }
     a.findings = [...grouped.values()];

@@ -13,6 +13,22 @@ export type Finding = {
   effort: string;
   kind: "Observed" | "Needs review";
 };
+export type PositiveSignal = {
+  id: string;
+  rule: string;
+  title: string;
+  category: Category;
+  pages: string[];
+  evidence: string;
+};
+export type AuditResource = {
+  path: string;
+  url: string;
+  status: number;
+  available: boolean;
+  contentType: string;
+  content: string;
+};
 export type AuditPage = {
   id?:string;
   url: string;
@@ -34,6 +50,7 @@ export type AuditConfig = {
   device: string;
   maxPages: number;
   keywords: string[];
+  keywordSource?: "provided" | "extracted";
   authorized: boolean;
 };
 export type User = { id: string; name: string; email: string };
@@ -80,6 +97,8 @@ export type Audit = {
   config: AuditConfig;
   pages: AuditPage[];
   findings: Finding[];
+  positives?: PositiveSignal[];
+  resources?: AuditResource[];
   score: number | null;
   scores: { category: Category; value: number | null; note: string }[];
   events: { time: string; message: string }[];

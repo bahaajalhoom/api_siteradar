@@ -2,7 +2,7 @@ import robotsParser from "robots-parser";
 import { claimAudit, getAudit, saveAudit, db } from "./db.ts";
 import { safeFetch, validateTarget } from "./safe-fetch.ts";
 import { analyzeHtml, scoreCategory } from "./checks.ts";
-import { categories, type Audit } from "../lib/types.ts";
+import { categories, type Audit, type AuditResource, type PositiveSignal } from "../lib/types.ts";
 import { startAuditBrowser } from "./browser-audit.ts";
 import { checkRankings } from "./rankings.ts";
 import { saveProject } from "./db.ts";
@@ -25,6 +25,30 @@ function event(a: Audit, message: string) {
   a.events.push({ time: new Date().toISOString(), message });
   saveAudit(a);
 }
+async function inspectResource(origin: string, path: string): Promise<AuditResource> {
+  const url = `${origin}${path}`;
+  try {
+    const response = await safeFetch(url, origin);
+    const contentType = String(response.headers["content-type"] ?? "");
+    return {
+      path,
+      url: response.url,
+      status: response.status,
+      available: response.status >= 200 && response.status < 300,
+      contentType,
+      content: response.body.slice(0, 20000),
+    };
+  } catch (error) {
+    return {
+      path,
+      url,
+      status: 0,
+      available: false,
+      contentType: "",
+      content: error instanceof Error ? error.message : "Resource could not be fetched.",
+    };
+  }
+}
 // A single local worker owns jobs; interrupted work fails explicitly rather than remaining stuck.
 let ownsLease = false;
 async function recoverInterruptedRuns() {
@@ -45,6 +69,7 @@ async function run(a: Audit) {
     const start = validateTarget(a.url);
     const origin = start.origin;
     const started = Date.now();
+    if (a.config.keywords.length) a.config.keywordSource = "provided";
     event(a, "Validating public DNS and checking robots.txt");
     const robotsResponse = await safeFetch(`${origin}/robots.txt`, origin);
     if (
@@ -60,6 +85,22 @@ async function run(a: Audit) {
     );
     if (!robots.isAllowed(start.href, "SiteRadar"))
       throw new Error("The homepage is blocked by robots.txt.");
+    a.resources = await Promise.all([
+      {
+        path: "/robots.txt",
+        url: `${origin}/robots.txt`,
+        status: robotsResponse.status,
+        available: robotsResponse.status >= 200 && robotsResponse.status < 300,
+        contentType: String(robotsResponse.headers["content-type"] ?? ""),
+        content: robotsResponse.body.slice(0, 20000),
+      },
+      inspectResource(origin, "/llms.txt"),
+      inspectResource(origin, "/llms-full.txt"),
+    ]);
+    event(
+      a,
+      `Checked discovery files: ${a.resources.filter((resource) => resource.available).map((resource) => resource.path).join(", ") || "none found"}.`,
+    );
     event(a, "Opening isolated Chromium for rendered-page checks");
     try {
       runtime = await startAuditBrowser(a.config);
@@ -113,6 +154,7 @@ async function run(a: Audit) {
         const result = analyzeHtml(html, response.url, response.status);
         a.pages.push(result.page);
         a.findings.push(...result.findings);
+        a.positives = [...(a.positives ?? []), ...result.positives];
         if (a.pages.length === 1 && !a.config.keywords.length) {
           a.config.keywords = [
             ...new Set(
@@ -121,6 +163,7 @@ async function run(a: Audit) {
                 .filter((s) => s.length >= 3 && s.length <= 120),
             ),
           ].slice(0, 8);
+          a.config.keywordSource = "extracted";
           event(
             a,
             `Saved ${a.config.keywords.length} initial keyword phrases from page content.`,
@@ -213,6 +256,15 @@ async function run(a: Audit) {
       } else grouped.set(finding.rule, { ...finding });
     }
     a.findings = [...grouped.values()];
+    const groupedPositives = new Map<string, PositiveSignal>();
+    for (const positive of a.positives ?? []) {
+      const existing = groupedPositives.get(positive.rule);
+      if (existing) {
+        existing.pages.push(...positive.pages);
+        existing.evidence += `\n${positive.pages[0]}: ${positive.evidence}`;
+      } else groupedPositives.set(positive.rule, { ...positive });
+    }
+    a.positives = [...groupedPositives.values()];
     const severity = ["Critical", "High", "Medium", "Low"];
     a.findings.sort(
       (x, y) => severity.indexOf(x.severity) - severity.indexOf(y.severity),

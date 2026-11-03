@@ -1,8 +1,9 @@
 import { load } from "cheerio";
-import type { AuditPage, Finding, Category, Severity } from "../lib/types";
+import type { AuditPage, Finding, PositiveSignal, Category, Severity } from "../lib/types";
 export function analyzeHtml(html: string, url: string, status: number) {
   const $ = load(html);
   const findings: Finding[] = [];
+  const positives: PositiveSignal[] = [];
   const title = $("title").first().text().trim();
   const description =
     $('meta[name="description" i]').attr("content")?.trim() ?? "";
@@ -32,6 +33,22 @@ export function analyzeHtml(html: string, url: string, status: number) {
       effort: "15–45 min",
       kind,
     });
+  const addPositive = (
+    rule: string,
+    title: string,
+    category: Category,
+    evidence: string,
+  ) =>
+    positives.push({
+      id: crypto.randomUUID(),
+      rule,
+      title,
+      category,
+      pages: [url],
+      evidence: evidence.slice(0, 1000),
+    });
+  if (status >= 200 && status < 300)
+    addPositive("TECH-HTTP-001", "Page responded successfully", "Technical", `GET ${url} → HTTP ${status}`);
   if (status < 200 || status >= 300)
     add(
       "SEO-HTTP-001",
@@ -50,6 +67,7 @@ export function analyzeHtml(html: string, url: string, status: number) {
       "No nonempty <title> was found.",
       "Add a unique title that describes the visible page content.",
     );
+  else addPositive("SEO-META-001", "Page has a descriptive title", "SEO", `<title>${title}</title>`);
   if (!description)
     add(
       "SEO-META-003",
@@ -59,6 +77,7 @@ export function analyzeHtml(html: string, url: string, status: number) {
       'No nonempty meta[name="description"] was found.',
       "Add a unique, factual summary of this page.",
     );
+  else addPositive("SEO-META-003", "Page has a meta description", "SEO", `meta description: ${description}`);
   if (h1.length !== 1)
     add(
       "SEO-HEAD-001",
@@ -70,6 +89,7 @@ export function analyzeHtml(html: string, url: string, status: number) {
       `Found ${h1.length} H1 elements.`,
       "Use one clear primary heading and a logical heading hierarchy.",
     );
+  else addPositive("SEO-HEAD-001", "Page has one primary heading", "SEO", `H1: ${h1[0]}`);
   if (!canonical)
     add(
       "SEO-CAN-001",
@@ -79,6 +99,7 @@ export function analyzeHtml(html: string, url: string, status: number) {
       'No link[rel="canonical"] was found.',
       "Review duplicate URL variants and declare the preferred absolute URL when appropriate.",
     );
+  else addPositive("SEO-CAN-001", "Page declares a canonical URL", "SEO", `canonical: ${canonical}`);
   if (/\bnoindex\b/i.test(robots))
     add(
       "SEO-INDEX-001",
@@ -89,6 +110,7 @@ export function analyzeHtml(html: string, url: string, status: number) {
       "Review whether this exclusion is intentional before removing noindex.",
       "Needs review",
     );
+  else addPositive("SEO-INDEX-001", "Page is not marked noindex", "SEO", robots ? `robots meta: ${robots}` : "No noindex directive was observed.");
   const missingAlt = $("img:not([alt])").length;
   if (missingAlt)
     add(
@@ -117,6 +139,7 @@ export function analyzeHtml(html: string, url: string, status: number) {
       "No viewport meta element was found.",
       "Add width=device-width, initial-scale=1 without restricting zoom.",
     );
+  else addPositive("TECH-VIEWPORT-001", "Mobile viewport is configured", "Technical", "A viewport meta element was observed.");
   const schema: string[] = [];
   $('script[type="application/ld+json"]').each((_, el) => {
     try {
@@ -156,6 +179,7 @@ export function analyzeHtml(html: string, url: string, status: number) {
       "Review whether Organization, Article, or Product schema fits the visible content.",
       "Needs review",
     );
+  else addPositive("GEO-SCHEMA-001", "Structured entities were detected", "GEO readiness", `JSON-LD types: ${schema.join(", ")}`);
   if (!$("h2").length)
     add(
       "GEO-STRUCTURE-001",
@@ -166,6 +190,7 @@ export function analyzeHtml(html: string, url: string, status: number) {
       "Review whether concise, answerable sections would help readers.",
       "Needs review",
     );
+  else addPositive("GEO-STRUCTURE-001", "Content has secondary headings", "GEO readiness", `Found ${$("h2").length} H2 sections.`);
   const links = $("a[href]")
     .map((_, el) => $(el).attr("href") ?? "")
     .get();
@@ -183,7 +208,7 @@ export function analyzeHtml(html: string, url: string, status: number) {
     indexable: status >= 200 && status < 300 && !/\bnoindex\b/i.test(robots),
     schema,
   };
-  return { page, findings, links };
+  return { page, findings, positives, links };
 }
 export function scoreCategory(
   findings: Finding[],

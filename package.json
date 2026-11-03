@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "start": "node server/http.ts",
     "worker": "node server/worker.ts",
     "test": "vitest run",
     "typecheck": "tsc --noEmit"

@@ -1,13 +1,19 @@
 import { DatabaseSync } from "node:sqlite";
 import { mkdirSync } from "node:fs";
-import { resolve } from "node:path";
+import { isAbsolute, resolve } from "node:path";
 import type { Audit } from "../lib/types";
 import type { Project } from '../lib/types';
 import { withResourceIds } from './resource-ids.ts';
-mkdirSync(resolve("data"), { recursive: true });
+// In production DATA_DIR must point to a persistent volume. The container's
+// filesystem is ephemeral and must never be used as the source of truth.
+const configuredDataDir = process.env.DATA_DIR?.trim() || "data";
+export const dataDir = isAbsolute(configuredDataDir)
+  ? configuredDataDir
+  : resolve(configuredDataDir);
+mkdirSync(dataDir, { recursive: true });
 const globalDb = globalThis as typeof globalThis & { radarDb?: DatabaseSync };
 export const db =
-  globalDb.radarDb ?? new DatabaseSync(resolve("data/siteradar.sqlite"));
+  globalDb.radarDb ?? new DatabaseSync(resolve(dataDir, "siteradar.sqlite"));
 globalDb.radarDb = db;
 db.exec(
   "PRAGMA journal_mode=WAL; PRAGMA busy_timeout=5000; CREATE TABLE IF NOT EXISTS audits (id TEXT PRIMARY KEY, status TEXT NOT NULL, created_at TEXT NOT NULL, body TEXT NOT NULL);",

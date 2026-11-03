@@ -30,6 +30,16 @@ npm run worker
 `data/` contains the local SQLite database and encryption key. It must never be
 committed or copied into a public repository.
 
+## Production persistence
+
+The API uses `DATA_DIR` for SQLite and the encryption key. In production, set
+`DATA_DIR` to the path of a persistent volume (for example `/data`) and mount
+that volume before deploying. A Git commit/redeploy is not a database backup;
+without a persistent volume every container restart can lose users, sessions,
+audits, projects, and encrypted integrations. Back up `siteradar.sqlite` and
+`.secrets-key` together; the database cannot decrypt saved integrations without
+the same key.
+
 ## Important separation status
 
 The worker and measurement layer have been extracted first. The HTTP API

@@ -1,9 +1,9 @@
 import { randomBytes, createCipheriv, createDecipheriv } from "node:crypto";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { db } from "./db.ts";
+import { dataDir, db } from "./db.ts";
 function key() {
-  const path = resolve("data/.secrets-key");
+  const path = resolve(dataDir, ".secrets-key");
   if (!existsSync(path)) {
     try {
       writeFileSync(path, randomBytes(32), { mode: 0o600, flag: "wx" });

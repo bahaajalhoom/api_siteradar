@@ -16,12 +16,17 @@ export async function startAuditBrowser(config: AuditConfig) {
       maxConnectionRetries: 40,
       connectionPollInterval: 250,
       chromeFlags: [
-        "--headless=new",
+        // The classic headless mode is more reliable in minimal Linux
+        // containers and still exposes the CDP port Lighthouse needs.
+        "--headless",
         `--proxy-server=${proxy.url}`,
         "--proxy-bypass-list=<-loopback>",
         "--no-sandbox",
         "--disable-setuid-sandbox",
         "--disable-gpu",
+        "--no-zygote",
+        "--disable-software-rasterizer",
+        "--remote-debugging-address=127.0.0.1",
         "--disable-quic",
         "--disable-background-networking",
         "--disable-component-update",

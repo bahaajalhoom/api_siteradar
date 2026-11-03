@@ -10,12 +10,18 @@ import { validateTarget } from "./safe-fetch.ts";
 import type { Audit } from "../lib/types.ts";
 
 const port = Number(process.env.PORT || 3000);
-const frontendOrigin = process.env.FRONTEND_ORIGIN || "https://siteradar.site";
+const allowedOrigins = new Set([
+  "https://siteradar.site",
+  "https://www.siteradar.site",
+  "http://127.0.0.1:3001",
+  "http://localhost:3001",
+  ...(process.env.FRONTEND_ORIGIN || "").split(",").map(value => value.trim()).filter(Boolean),
+]);
 const sessionCookie = "siteradar_session";
 const tokenHash = (token: string) => createHash("sha256").update(token).digest("hex");
 function json(res: ServerResponse, status: number, value: unknown) { res.writeHead(status, { "Content-Type": "application/json" }); res.end(JSON.stringify(value)); }
 function addCors(req: IncomingMessage, res: ServerResponse) {
-  if (req.headers.origin === frontendOrigin) { res.setHeader("Access-Control-Allow-Origin", frontendOrigin); res.setHeader("Access-Control-Allow-Credentials", "true"); res.setHeader("Vary", "Origin"); }
+  if (req.headers.origin && allowedOrigins.has(req.headers.origin)) { res.setHeader("Access-Control-Allow-Origin", req.headers.origin); res.setHeader("Access-Control-Allow-Credentials", "true"); res.setHeader("Vary", "Origin"); }
   res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization"); res.setHeader("Access-Control-Allow-Methods", "GET, POST, PATCH, OPTIONS");
 }
 function cookie(req: IncomingMessage, name: string) { return req.headers.cookie?.split(";").map(x => x.trim()).find(x => x.startsWith(`${name}=`))?.slice(name.length + 1); }

@@ -2,6 +2,7 @@ import robotsParser from "robots-parser";
 import { claimAudit, getAudit, saveAudit, db } from "./db.ts";
 import { safeFetch, validateTarget } from "./safe-fetch.ts";
 import { analyzeHtml, scoreCategory } from "./checks.ts";
+import { analyzeDiscovery, sitemapDeclarations } from "./discovery-checks.ts";
 import { categories, type Audit, type AuditResource, type PositiveSignal } from "../lib/types.ts";
 import { startAuditBrowser } from "./browser-audit.ts";
 import { checkRankings } from "./rankings.ts";
@@ -36,7 +37,7 @@ async function inspectResource(origin: string, path: string): Promise<AuditResou
       status: response.status,
       available: response.status >= 200 && response.status < 300,
       contentType,
-      content: response.body.slice(0, 20000),
+      content: response.body,
     };
   } catch (error) {
     return {
@@ -72,19 +73,10 @@ async function run(a: Audit) {
     if (a.config.keywords.length) a.config.keywordSource = "provided";
     event(a, "Validating public DNS and checking robots.txt");
     const robotsResponse = await safeFetch(`${origin}/robots.txt`, origin);
-    if (
-      robotsResponse.status !== 404 &&
-      (robotsResponse.status < 200 || robotsResponse.status >= 300)
-    )
-      throw new Error(
-        `robots.txt returned HTTP ${robotsResponse.status}; scan stopped conservatively.`,
-      );
     const robots = robotsParser(
       `${origin}/robots.txt`,
       robotsResponse.status === 404 ? "" : robotsResponse.body,
     );
-    if (!robots.isAllowed(start.href, "SiteRadar"))
-      throw new Error("The homepage is blocked by robots.txt.");
     a.resources = await Promise.all([
       {
         path: "/robots.txt",
@@ -92,15 +84,35 @@ async function run(a: Audit) {
         status: robotsResponse.status,
         available: robotsResponse.status >= 200 && robotsResponse.status < 300,
         contentType: String(robotsResponse.headers["content-type"] ?? ""),
-        content: robotsResponse.body.slice(0, 20000),
+        content: robotsResponse.body,
       },
       inspectResource(origin, "/llms.txt"),
       inspectResource(origin, "/llms-full.txt"),
+      inspectResource(origin, "/sitemap.xml"),
     ]);
+    // Inspect same-origin declarations as well as the conventional root path.
+    const declared = [...new Set(sitemapDeclarations(robotsResponse.body))].slice(0, 4);
+    for (const raw of declared) {
+      try {
+        const url = validateTarget(raw);
+        if (url.origin === origin && !a.resources.some(r => r.url === url.href))
+          a.resources.push(await inspectResource(origin, url.pathname + url.search));
+      } catch { /* Invalid declarations are reported by the content checks. */ }
+    }
+    // A valid declared alternative replaces the conventional missing sitemap.
+    const analysisResources = a.resources.filter(r => r.path !== '/sitemap.xml' || r.available || !a.resources!.some(other => other.path !== '/robots.txt' && !other.path.startsWith('/llms') && other.available));
+    const discovery = analyzeDiscovery(analysisResources, origin);
+    a.findings.push(...discovery.findings);
+    a.positives = [...(a.positives ?? []), ...discovery.positives];
+    for (const resource of a.resources) resource.content = resource.content.slice(0, 20000);
     event(
       a,
       `Checked discovery files: ${a.resources.filter((resource) => resource.available).map((resource) => resource.path).join(", ") || "none found"}.`,
     );
+    if (robotsResponse.status !== 404 && (robotsResponse.status < 200 || robotsResponse.status >= 300))
+      throw new Error(`robots.txt returned HTTP ${robotsResponse.status}; scan stopped conservatively.`);
+    if (!robots.isAllowed(start.href, "SiteRadar"))
+      throw new Error("The homepage is blocked by robots.txt.");
     event(a, "Opening isolated Chromium for rendered-page checks");
     try {
       runtime = await startAuditBrowser(a.config);

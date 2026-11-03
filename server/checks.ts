@@ -228,8 +228,8 @@ export function scoreCategory(
       100 -
         findings
           .filter((f) => f.category === category)
-          .reduce((sum, f) => sum + weights[f.severity] * f.pages.length, 0) /
-          pageCount,
+          .reduce((sum, f) => sum + weights[f.severity] *
+            (/^(SEO-(ROBOTS|SITEMAP)|GEO-(DISCOVERY|ROBOTS))/.test(f.rule) ? pageCount : f.pages.length), 0) / pageCount,
     ),
   );
 }

@@ -4,6 +4,7 @@ import { safeFetch, validateTarget } from "./safe-fetch.ts";
 import { analyzeHtml, scoreCategory } from "./checks.ts";
 import { analyzeDiscovery, sitemapDeclarations } from "./discovery-checks.ts";
 import { contentQuality, missingFileGuidance } from "./content-quality.ts";
+import { semanticReview } from "./semantic-review.ts";
 import { categories, type Audit, type AuditResource, type PositiveSignal } from "../lib/types.ts";
 import { startAuditBrowser } from "./browser-audit.ts";
 import { checkRankings } from "./rankings.ts";
@@ -66,6 +67,7 @@ async function recoverInterruptedRuns() {
   }
 }
 async function run(a: Audit) {
+  const snippets: {url:string;text:string}[] = [];
   let runtime: Awaited<ReturnType<typeof startAuditBrowser>> | undefined;
   try {
     const start = validateTarget(a.url);
@@ -164,6 +166,7 @@ async function run(a: Audit) {
           }
         }
         const result = analyzeHtml(html, response.url, response.status);
+        if(snippets.length<3)snippets.push({url:response.url,text:`Title: ${result.page.title}\nDescription: ${result.page.description}\nContent: ${result.content}`});
         a.pages.push(result.page);
         a.findings.push(...result.findings);
         a.positives = [...(a.positives ?? []), ...result.positives];
@@ -268,6 +271,13 @@ async function run(a: Audit) {
           : "Keywords saved. Connect SerpApi to measure search positions.",
       );
     }
+    if(getAudit(a.id)?.status === 'cancelled') { a.status='cancelled'; return; }
+    event(a, 'Reviewing sampled page content, discovery files and up to four keywords with Ollama');
+    const semantic=await semanticReview(a,snippets);
+    a.semanticReview=semantic.review;
+    a.findings.push(...semantic.findings);
+    event(a, semantic.review.status==='completed' ? 'AI editorial review ready; suggestions require human review.' : `AI editorial review ${semantic.review.status}; technical measurements preserved.`);
+    if(getAudit(a.id)?.status === 'cancelled') { a.status='cancelled'; return; }
     const grouped = new Map<string, (typeof a.findings)[number]>();
     for (const finding of a.findings) {
       const existing = grouped.get(finding.rule);

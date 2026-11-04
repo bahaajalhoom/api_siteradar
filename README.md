@@ -34,6 +34,19 @@ committed or copied into a public repository.
 
 ## Discovery and content checks
 
+Ollama editorial review uses the configured Academy endpoint and `qwen2.5:1.5b`
+from the backend worker. Override `OLLAMA_BASE_URL`, `OLLAMA_MODEL`, or set
+`OLLAMA_ENABLED=false` to disable. An optional `OLLAMA_API_KEY` is sent only
+from the backend as a gateway Bearer header. Each audit samples at most three
+pages, four discovery files and four keywords; snippets and generated output
+are bounded, and the request has a 90-second deadline with no automatic retries.
+Only supplied source IDs and exact source quotes are accepted. Suggestions
+remain untrusted editorial opinions, require review, and do not alter scores.
+Failures preserve technical results. The model can still misunderstand content;
+uncertain or conflicting classifications are disclosed. No tokens or account
+credentials are sent in prompts. The single worker serializes this project's
+jobs; other projects using the same Ollama host need their own coordination.
+
 Discovery reports inspect fetched robots directives, sitemap XML/URLs, and
 llms Markdown. Editorial checks flag short explanations, repeated passages,
 generic link labels, excluded observed link targets, duplicate full-text

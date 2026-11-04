@@ -208,7 +208,7 @@ export function analyzeHtml(html: string, url: string, status: number) {
     indexable: status >= 200 && status < 300 && !/\bnoindex\b/i.test(robots),
     schema,
   };
-  return { page, findings, positives, links };
+  return { page, findings, positives, links, content: ($('main').text().replace(/\s+/g, ' ').trim() || text).slice(0, 2400) };
 }
 export function scoreCategory(
   findings: Finding[],
@@ -227,7 +227,7 @@ export function scoreCategory(
     Math.round(
       100 -
         findings
-          .filter((f) => f.category === category)
+          .filter((f) => f.category === category && !f.rule.startsWith('AI-'))
           .reduce((sum, f) => sum + weights[f.severity] *
             (/^(SEO-(ROBOTS|SITEMAP)|GEO-(DISCOVERY|ROBOTS))/.test(f.rule) ? pageCount : f.pages.length), 0) / pageCount,
     ),

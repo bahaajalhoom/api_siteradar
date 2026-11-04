@@ -88,6 +88,7 @@ export type PerformanceReport = {
   warnings: string[];
 };
 export type Audit = {
+  semanticReview?: import('../server/semantic-review.ts').SemanticReview;
   id: string;
   name: string;
   url: string;

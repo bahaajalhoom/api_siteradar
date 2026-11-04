@@ -53,6 +53,11 @@ export async function semanticReview(audit:Audit, snippets:{url:string;text:stri
     if(keywords.length && !validated.keywords.length)throw Error('No keyword judgments had verifiable source evidence');
     const review:SemanticReview={...meta,status:'completed',...validated,totalKeywords:audit.config.keywords.length,sources:sources.map(s=>({id:s.id,url:s.url,characters:s.text.length}))};
     const findings:Finding[]=validated.issues.map((item,i)=>({id:crypto.randomUUID(),rule:`AI-CONTENT-${i+1}`,title:item.title,category:'GEO readiness',severity:'Low',pages:[sources.find(s=>s.id===item.source)!.url],evidence:`AI opinion (${model}), not a measured defect. Source quote: ${item.quote}`,recommendation:`Human review required. AI suggestion (untrusted): <UNTRUSTED_PAGE_DATA>${item.recommendation.replaceAll('</UNTRUSTED_PAGE_DATA>','')}</UNTRUSTED_PAGE_DATA>`,effort:'Editorial review',kind:'Needs review'}));
+    validated.keywords.filter(item=>item.fit==='broad'||item.fit==='mismatch').forEach((item,i)=>findings.push({
+      id:crypto.randomUUID(),rule:`AI-KEYWORD-${i+1}`,title:`Review keyword relevance: ${item.phrase}`,category:'SEO',severity:'Low',pages:[sources.find(s=>s.id===item.source)!.url],
+      evidence:`AI opinion (${model}); classification: ${item.fit}. Source quote: ${item.quote}`,
+      recommendation:`Human review required. AI suggestion (untrusted): <UNTRUSTED_PAGE_DATA>${[item.reason,item.suggestion].join('\n').replaceAll('</UNTRUSTED_PAGE_DATA>','')}</UNTRUSTED_PAGE_DATA>`,effort:'Editorial review',kind:'Needs review',
+    }));
     return {review,findings};
   } catch(error) {
     return {review:{...meta,status:'failed',error:error instanceof Error?error.message.slice(0,200):'AI review unavailable'},findings:[]};

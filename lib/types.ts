@@ -59,6 +59,7 @@ export type RankRecord = {
   position: number | null;
   checkedAt: string;
   searched: number;
+  coverageNote?: string;
   url: string | null;
   results: { position: number; url: string; title: string; domain: string }[];
   context?: {

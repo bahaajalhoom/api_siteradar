@@ -268,7 +268,7 @@ async function run(a: Audit) {
         a,
         ranks
           ? `Recorded ${ranks.length} search queries.`
-          : "Keywords saved. Connect SerpApi to measure search positions.",
+          : "Keywords saved. Open a keyword on Google from the report to check it manually.",
       );
     }
     if(getAudit(a.id)?.status === 'cancelled') { a.status='cancelled'; return; }

@@ -2,12 +2,36 @@ import { beforeEach, describe, it, expect, vi } from "vitest";
 const mocks = vi.hoisted(() => ({ getSecret: vi.fn() }));
 vi.mock("./secrets.ts", () => ({ getSecret: mocks.getSecret }));
 import { checkRankings } from "./rankings";
-import { exampleAudit } from "../lib/example";
+const exampleAudit = {config:{url:'https://formandfield.example/',country:'United States',language:'English',device:'Mobile',maxPages:1,authorized:true,keywords:['desk accessories']}};
 beforeEach(() => {
   vi.resetAllMocks();
   vi.unstubAllGlobals();
 });
 describe("contextual keyword positions", () => {
+  it('records the absolute position from a later page and preserves actual depth', async () => {
+    mocks.getSecret.mockReturnValue('unit-test-key');
+    const page = (next?: number, match = false) => new Response(JSON.stringify({
+      organic_results: [{position: 1, link: match ? exampleAudit.config.url : `https://other.example/${next}`}],
+      serpapi_pagination: next ? {next: `https://serpapi.com/search.json?start=${next}`} : {},
+    }));
+    const request = vi.fn().mockResolvedValueOnce(page(10)).mockResolvedValueOnce(page(20)).mockResolvedValueOnce(page(undefined, true));
+    vi.stubGlobal('fetch',request);
+    const [result] = (await checkRankings('owner',exampleAudit.config))!;
+    expect(result.position).toBe(21);
+    expect(result.searched).toBe(3);
+    expect(request.mock.calls[2][0]).toContain('start=20');
+  });
+  it('labels partial data when a later provider page fails', async () => {
+    mocks.getSecret.mockReturnValue('unit-test-key');
+    vi.stubGlobal('fetch',vi.fn().mockResolvedValueOnce(new Response(JSON.stringify({
+      organic_results:[{position:1,link:'https://other.example/'}],
+      serpapi_pagination:{next:'https://serpapi.com/search.json?start=10'},
+    }))).mockRejectedValueOnce(new Error('Timeout')));
+    const [result] = (await checkRankings('owner',exampleAudit.config))!;
+    expect(result.searched).toBe(1);
+    expect(result.position).toBeNull();
+    expect(result.coverageNote).toMatch(/partial/i);
+  });
   it("keeps rankings unavailable without a key and makes no requests", async () => {
     mocks.getSecret.mockReturnValue("");
     const request = vi.fn();
